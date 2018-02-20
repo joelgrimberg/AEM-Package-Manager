@@ -12,7 +12,7 @@ NAME=""
 
 function usage
 {
-	echo "usage: aem-pkmgr [list|install|download|upload|build] [-h http://localhost:4503] [-u admin1] [-p admin2] [-pk package.zip]"
+	echo "usage: aem-pkmgr [list|install|download|download_all|upload|build] [-h http://localhost:4503] [-u admin1] [-p admin2] [-pk package.zip]"
 }
 
 function help
@@ -26,6 +26,7 @@ function help
 	echo " upload-install  - uploads and installs a package"
 	echo " build           - builds a package"
 	echo " download        - downloads a package"
+	echo " download_all    - lists all available packages"
 	echo ""
 	echo "---Parameters---"
 	echo "-h  | --host     - Sets the AEM host, default is 'http://localhost:4502'"
@@ -99,6 +100,21 @@ download ()
 	echo ""
 }
 
+download_all ()
+{
+	echo "DOWNLOADING ALL PACKAGES..."
+	echo ""
+	ruby -ruri -rjson -rnet/http -e 'uri = URI.parse(ARGV[2]+"/crx/packmgr/list.jsp"); request = Net::HTTP::Get.new(uri); request.basic_auth(ARGV[3],ARGV[4]); response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") do |http|   http.request(request);  end;  group = ARGV[0].downcase;  name = ARGV[1].downcase;  j = JSON.parse(response.body);  j["results"].each do |package|  if (package["name"].downcase.include? name) and (package["group"].downcase.include? group) then   print "\t"+(package["path"] == nil ? "" : package["path"])+"\n";
+	end end ' "$GROUP" "$NAME" "$HOST" "$USER" "$PASSWORD" > output.txt
+	echo "Total # of packages:"
+	echo $(wc -l < output.txt)
+	for x in $(cat output.txt)
+		do
+    	encoded_package=${x// /%20}
+			curl -u $USER:$PASSWORD -O --fail "$HOST$encoded_package"
+	done
+}
+
 build ()
 {
 	if [ "$PACKAGE" == "0" ]; then
@@ -143,14 +159,16 @@ while [ "$1" != "" ]; do
 								;;
 		list )					ACTION="list"
 								;;
-		"install" )				ACTION="install"
+		"install" )			ACTION="install"
 								;;
 		"upload-install" )		ACTION="upload-install"
 								;;
 		upload )				ACTION="upload"
 								;;
-		download )				ACTION="download"
+		download )			ACTION="download"
 								;;
+		download_all )			ACTION="download_all"
+														;;
 		* )						usage
 								exit 1
 	esac
@@ -158,8 +176,9 @@ while [ "$1" != "" ]; do
 done
 
 # Perform the actions
+
 if [ "$ACTION" = "list" ]; then
-	list
+		list
 elif [ "$ACTION" = "install" ] ; then
 	install_package
 elif [ "$ACTION" = "upload-install" ] ; then
@@ -168,6 +187,8 @@ elif [ "$ACTION" = "upload" ] ; then
 	upload
 elif [ "$ACTION" = "download" ] ; then
 	download
+elif [ "$ACTION" = "download_all" ]; then
+		download_all
 elif [ "$ACTION" = "build" ] ; then
 	build
 else
